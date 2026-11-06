@@ -1,0 +1,31 @@
+name: 问题反馈 / Bug report
+description: 报告可复现的问题，请勿上传真实记录或凭据。
+title: '[Bug] '
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 版本与运行方式 / Version
+      placeholder: v1.0.0，Windows 下载版 / 源码
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps
+      description: 描述实际结果和预期结果，可附经过脱敏的截图。
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境 / Environment
+      placeholder: Windows 版本、浏览器、Python 版本（源码运行时）
+  - type: checkboxes
+    id: safe
+    attributes:
+      label: 附件检查
+      options:
+        - label: 我没有上传数据库、连接码、密码或其他人的资料。
+          required: true

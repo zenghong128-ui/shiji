@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 使用指南 / User guide
+    url: https://github.com/zenghong128-ui/shiji/blob/main/docs/USER_GUIDE.md
+    about: 先查看安装、提醒、手机访问和备份说明。

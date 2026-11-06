@@ -1,0 +1,29 @@
+name: Build Windows
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version without v prefix
+        default: '1.0.0'
+        required: true
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m venv .venv
+      - run: .venv/Scripts/python.exe -m pip install -r requirements-build.txt
+      - run: .venv/Scripts/python.exe -m unittest -v
+      - shell: pwsh
+        env:
+          SHIJI_RELEASE_VERSION: ${{ inputs.version }}
+        run: ./tools/build_windows.ps1 -Version $env:SHIJI_RELEASE_VERSION
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Shiji-windows-x64
+          path: release/*.zip

@@ -1,0 +1,11 @@
+{
+  "name": "shiji-dev-tools",
+  "private": true,
+  "scripts": {
+    "format": "prettier --write static README*.md docs/*.md .github/**/*.yml *.json",
+    "check:js": "node --check static/app.js && node --check static/detail-editor.js"
+  },
+  "devDependencies": {
+    "prettier": "3.9.10"
+  }
+}
