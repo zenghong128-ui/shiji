@@ -1,6 +1,8 @@
 """拾记：本地 SQLite、桌面窗口和可选局域网访问，无第三方依赖。"""
 
 import argparse
+import archives
+from rich_content import sanitize_markup
 import ctypes
 from contextlib import contextmanager
 import datetime as dt
@@ -108,6 +110,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS categories(name TEXT PRIMARY KEY);
         """)
+        archives.initialize(db)
         for row in db.execute("SELECT body FROM notes"):
             note = json.loads(row["body"])
             db.execute(
@@ -221,6 +224,8 @@ def validate(body):
     )
     if content is not None:
         note["detailContent"] = normalized
+    if "detailHtml" in body:
+        note["detailHtml"] = sanitize_markup(body["detailHtml"], images)
     return note
 
 
@@ -296,6 +301,8 @@ def due_alerts(now):
 def reminder_loop():
     while True:
         try:
+            with LOCK, connect() as db:
+                archives.run_scheduled(db)
             alerts = due_alerts(dt.datetime.now())
             if alerts and os.name == "nt":
                 message = "\n\n".join(alerts)
@@ -362,6 +369,15 @@ class Handler(BaseHTTPRequestHandler):
                     "remainingSeconds": remaining,
                 }
                 return self.send(200, state)
+            if path == "/api/archives":
+                with connect() as db:
+                    return self.send(
+                        200,
+                        {
+                            "archives": archives.list_archives(db),
+                            "schedule": archives.schedule(db),
+                        },
+                    )
             if path == "/api/privacy/settings":
                 return self.send(200, {"configured": bool(privacy_config())})
             if path == "/api/connection":
@@ -384,6 +400,7 @@ class Handler(BaseHTTPRequestHandler):
         files = {
             "/": ("index.html", "text/html; charset=utf-8"),
             "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+            "/enhancements.js": ("enhancements.js", "text/javascript; charset=utf-8"),
             "/detail-editor.js": ("detail-editor.js", "text/javascript; charset=utf-8"),
             "/style.css": ("style.css", "text/css; charset=utf-8"),
         }
@@ -508,7 +525,31 @@ class Handler(BaseHTTPRequestHandler):
                 PRIVACY_GRANTS.pop(self.headers.get("X-Privacy-Token", ""), None)
                 return self.send(200, {"ok": True})
             with LOCK, connect() as db:
-                if path == "/api/categories":
+                if path == "/api/archives/create":
+                    archive_id = archives.create(db, body.get("title", ""))
+                    db.commit()
+                    return self.send(200, {"ok": True, "id": archive_id})
+                elif path == "/api/archives/schedule":
+                    archives.configure(db, body.get("frequency", "off"))
+                elif path == "/api/archives/export":
+                    row = db.execute(
+                        "SELECT * FROM archives WHERE id=?", (body.get("id", ""),)
+                    ).fetchone()
+                    if not row:
+                        raise ValueError("存档不存在")
+                    include_private = bool(body.get("includePrivate", False))
+                    if include_private:
+                        if not visibility_remaining(self):
+                            raise PrivacyError("请先开启显示开关，再导出受保护内容")
+                        check_password(body.get("password", ""), self.client_address[0])
+                    return self.send(
+                        200,
+                        {
+                            "filename": "shiji-" + row["id"] + ".html",
+                            "html": archives.export_html(row, include_private),
+                        },
+                    )
+                elif path == "/api/categories":
                     name = body.get("name", "")
                     if (
                         not isinstance(name, str)

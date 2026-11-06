@@ -52,6 +52,7 @@ def main():
                 raise RuntimeError("Packaged server did not start")
             assert "detail-editor" in html
             assert b"openImageViewer" in request("/detail-editor.js")
+            assert b"requestEditorClose" in request("/enhancements.js")
             token = (Path(temporary) / "connection.key").read_text().strip()
             request(
                 "/api/save",
@@ -73,6 +74,12 @@ def main():
             assert state["notes"][0]["title"] == "Release smoke test"
             assert state["visibility"]["enabled"] is False
             assert "Smoke" in state["categories"]
+            archive_id = json.loads(request("/api/archives/create", {}, token))["id"]
+            exported = json.loads(
+                request("/api/archives/export", {"id": archive_id}, token)
+            )
+            assert "Release smoke test" in exported["html"]
+            assert "Content-Security-Policy" in exported["html"]
             subprocess.run(
                 [str(executable), "--stop", "--port", str(args.port)],
                 env=environment,

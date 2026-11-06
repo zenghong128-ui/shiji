@@ -41,6 +41,16 @@
             <path d="m9 3-1 3-3 1-2 5 2 5 3 1 1 3h6l1-3 3-1 2-5-2-5-3-1-1-3Z" />
             <circle cx="12" cy="12" r="3" />
           </svg></button
+        ><button
+          id="archives-open"
+          class="icon-button"
+          type="button"
+          title="存档与导出"
+          aria-label="存档与导出"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 8h16v13H4zM3 3h18v5H3zM9 12h6" />
+          </svg></button
         ><button id="connect">⇄　手机连接</button>
         <p>本机存储 · 自动保存<br />Ctrl Shift Space 唤起窗口</p>
       </footer>
@@ -59,7 +69,9 @@
           placeholder="有什么要记下来？输入后按 Enter"
           maxlength="160"
           aria-label="快速记录名称"
-        /><button id="quick-add">＋ 记录</button><button id="details">添加详情 / 图片</button>
+        /><button id="quick-add">＋ 记录</button
+        ><button id="restore-draft" type="button" hidden>恢复未保存内容</button
+        ><button id="details">添加详情 / 图片</button>
       </section>
       <div class="toolbar">
         <div id="status-tabs">
@@ -105,7 +117,14 @@
         <div class="detail-field">
           <label id="detail-label">详细信息</label>
           <div class="detail-tools">
-            <button type="button" id="insert-image">＋ 插入图片</button
+            <button type="button" id="format-bold" aria-label="加粗选中文字" title="加粗 Ctrl+B">
+              <strong>B</strong></button
+            ><select id="format-heading" aria-label="正文标题等级">
+              <option value="p">正文</option>
+              <option value="h1">标题 1</option>
+              <option value="h2">标题 2</option>
+              <option value="h3">标题 3</option></select
+            ><button type="button" id="insert-image">＋ 插入图片</button
             ><span>可直接粘贴截图或拖入图片</span
             ><input
               id="images"
@@ -255,8 +274,61 @@
         </button>
       </form>
     </dialog>
+    <dialog id="unsaved-dialog">
+      <h2>保存修改？</h2>
+      <p>这条事项有未保存的修改。请选择保存后关闭，或继续编辑。</p>
+      <div class="form-actions">
+        <button id="unsaved-discard" type="button">不保存</button
+        ><button id="unsaved-cancel" type="button">继续编辑</button
+        ><button id="unsaved-save" type="button" class="primary">保存并关闭</button>
+      </div>
+    </dialog>
+    <dialog id="archives-dialog">
+      <div class="dialog-heading">
+        <h2>总体存档与导出</h2>
+        <button id="archives-close" type="button" aria-label="关闭存档">×</button>
+      </div>
+      <p class="hint">
+        存档保存当时的全部事项、图片与完成记录，不删除当前事项。数据保存在本机数据库。
+      </p>
+      <div class="archive-controls">
+        <button id="archive-create" class="primary" type="button">立即存档全部事项</button
+        ><label
+          >定期存档<select id="archive-frequency">
+            <option value="off">关闭</option>
+            <option value="weekly">每周一</option>
+            <option value="monthly">每月1日</option>
+          </select></label
+        ><button id="archive-save-schedule" type="button">保存计划</button>
+      </div>
+      <p class="hint">
+        定期存档需要后台运行，错过时在下次运行后生成当期快照，不补造过去数据。默认关闭。
+      </p>
+      <div id="archive-list"></div>
+    </dialog>
+    <dialog id="archive-export-dialog">
+      <div class="dialog-heading">
+        <h2>导出 HTML</h2>
+        <button id="archive-export-close" type="button" aria-label="关闭导出">×</button>
+      </div>
+      <form id="archive-export-form">
+        <p id="archive-export-title"></p>
+        <label class="check"
+          ><input
+            id="archive-include-private"
+            type="checkbox"
+          />包含受保护事项（需要开启眼睛开关并验证密码）</label
+        ><label id="archive-password-field" hidden
+          >总体密码<input id="archive-export-password" type="password" autocomplete="off"
+        /></label>
+        <p class="hint">HTML 内嵌图片，可离线查看。导出的文件没有密码保护，请妥善保存或分享。</p>
+        <p id="archive-export-error" class="privacy-error" role="alert"></p>
+        <button type="submit" class="primary">下载 HTML 文件</button>
+      </form>
+    </dialog>
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="/detail-editor.js"></script>
     <script src="/app.js"></script>
+    <script src="/enhancements.js"></script>
   </body>
 </html>

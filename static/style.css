@@ -1350,3 +1350,102 @@ footer .icon-button.enabled .eye-slash {
 .image-viewer-message[hidden] {
   display: none;
 }
+#editor .detail-tools {
+  flex-wrap: wrap;
+}
+#editor #format-heading {
+  width: auto;
+  min-width: 95px;
+  padding: 6px 9px;
+  font-size: 12px;
+  font-weight: 500;
+}
+#editor #format-bold {
+  font-size: 17px;
+  padding: 5px 12px;
+}
+#editor .rich-detail h1,
+.rich-preview h1 {
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1.5;
+  margin: 12px 0 8px;
+}
+#editor .rich-detail h2,
+.rich-preview h2 {
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1.5;
+  margin: 10px 0 7px;
+}
+#editor .rich-detail h3,
+.rich-preview h3 {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.5;
+  margin: 8px 0 6px;
+}
+#editor .rich-detail p,
+.rich-preview p {
+  margin: 0 0 8px;
+}
+#archives-dialog {
+  width: min(820px, 94vw);
+}
+.archive-controls {
+  display: flex;
+  align-items: end;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 18px 0;
+}
+.archive-controls label {
+  margin: 0;
+  min-width: 150px;
+}
+.archive-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 17px 0;
+  border-top: 1px solid #e3eaf3;
+}
+.archive-row strong {
+  font-size: 14px;
+}
+.archive-row p {
+  margin: 5px 0 0;
+}
+.archive-row button {
+  white-space: nowrap;
+  color: #3567c8;
+  background: #edf3ff;
+}
+#archive-password-field[hidden],
+#restore-draft[hidden] {
+  display: none;
+}
+#archive-export-form .check {
+  padding-top: 0;
+}
+#unsaved-dialog .form-actions {
+  flex-wrap: wrap;
+}
+@media (max-width: 560px) {
+  nav {
+    padding-right: 182px;
+  }
+  .archive-controls {
+    align-items: stretch;
+  }
+  .archive-controls > * {
+    width: 100%;
+  }
+  .archive-row {
+    align-items: flex-start;
+  }
+  .detail-tools span {
+    display: none;
+  }
+}

@@ -272,6 +272,99 @@ class NotesTest(unittest.TestCase):
             self.request("delete", {"id": nid}, privacy_token=grant)[0], 403
         )
 
+    def test_rich_text_sanitizes_markup_and_retains_formatting(self):
+        image = "data:image/png;base64,iVBORw0KGgo="
+        body = dict(
+            self.note(),
+            images=[image],
+            detailHtml='<h2 onclick="bad()">会议事项</h2><p><b>重点</b>与正文<img data-image-index="0" onerror="bad()"><script>bad()</script><img src="https://example.invalid/private.png"></p>',
+        )
+        self.assertEqual(self.request("save", body)[0], 200)
+        markup = self.request("state")[1]["notes"][0]["detailHtml"]
+        self.assertIn("<h2>会议事项</h2>", markup)
+        self.assertIn("<strong>重点</strong>", markup)
+        self.assertIn('data-image-index="0"', markup)
+        self.assertNotIn("bad()", markup)
+        self.assertNotIn("https://", markup)
+
+    def test_archive_snapshot_is_independent_and_exports_offline_html(self):
+        image = "data:image/png;base64,iVBORw0KGgo="
+        body = dict(
+            self.note(),
+            title="Archived <meeting>",
+            detail="Before change",
+            images=[image],
+            detailHtml='<h1>会议标题</h1><p><strong>Before change</strong></p><img data-image-index="0">',
+        )
+        self.request("save", body)
+        note = self.request("state")[1]["notes"][0]
+        archive_id = self.request("archives/create", {})[1]["id"]
+        self.request(
+            "save", dict(note, detail="After change", detailHtml="<p>After change</p>")
+        )
+        exported = self.request("archives/export", {"id": archive_id})[1]["html"]
+        self.assertIn("Before change", exported)
+        self.assertNotIn("After change", exported)
+        self.assertIn("Archived &lt;meeting&gt;", exported)
+        self.assertIn("<h1>会议标题</h1>", exported)
+        self.assertIn("data:image/png;base64,", exported)
+        self.assertIn("Content-Security-Policy", exported)
+        self.assertEqual(len(self.request("state")[1]["notes"]), 1)
+        self.assertEqual(self.request("archives")[1]["archives"][0]["count"], 1)
+
+    def test_archive_protected_export_requires_both_display_and_password(self):
+        self.request("privacy/password", {"newPassword": "secret123"})
+        self.request(
+            "save",
+            dict(
+                self.note(),
+                title="Protected archive name",
+                detail="Protected archive body",
+                private=True,
+            ),
+        )
+        archive_id = self.request("archives/create", {})[1]["id"]
+        public_html = self.request("archives/export", {"id": archive_id})[1]["html"]
+        self.assertNotIn("Protected archive", public_html)
+        self.assertEqual(
+            self.request(
+                "archives/export",
+                {"id": archive_id, "includePrivate": True, "password": "secret123"},
+            )[0],
+            403,
+        )
+        self.enable_visibility()
+        self.assertEqual(
+            self.request(
+                "archives/export",
+                {"id": archive_id, "includePrivate": True, "password": "wrong"},
+            )[0],
+            403,
+        )
+        code, result = self.request(
+            "archives/export",
+            {"id": archive_id, "includePrivate": True, "password": "secret123"},
+        )
+        self.assertEqual(code, 200)
+        self.assertIn("Protected archive body", result["html"])
+
+    def test_scheduled_archives_once_per_month_or_week(self):
+        with app.connect() as db:
+            app.archives.configure(db, "monthly", dt.datetime(2026, 11, 6))
+            self.assertIsNone(app.archives.run_scheduled(db, dt.datetime(2026, 11, 30)))
+            self.assertIsNotNone(
+                app.archives.run_scheduled(db, dt.datetime(2026, 12, 1))
+            )
+            self.assertIsNone(app.archives.run_scheduled(db, dt.datetime(2026, 12, 2)))
+            app.archives.configure(db, "weekly", dt.datetime(2026, 12, 28))
+            self.assertIsNone(app.archives.run_scheduled(db, dt.datetime(2027, 1, 3)))
+            self.assertIsNotNone(
+                app.archives.run_scheduled(db, dt.datetime(2027, 1, 4))
+            )
+            self.assertEqual(len(app.archives.list_archives(db)), 2)
+            app.archives.configure(db, "off")
+            self.assertIsNone(app.archives.run_scheduled(db, dt.datetime(2028, 1, 1)))
+
     def test_recurrence(self):
         note = self.note()
         note["repeat"], note["weekdays"] = "weekly", [0, 3]

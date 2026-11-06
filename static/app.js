@@ -149,7 +149,7 @@ function card(n, day) {
   const blocks = noteContent(n);
   if (blocks.length) {
     const detail = el('div', 'detail rich-preview');
-    appendContent(detail, blocks);
+    appendNoteContent(detail, n);
     content.append(detail);
     const expand = el('button', 'expand-detail', '展开详情');
     expand.onclick = () => {
@@ -521,6 +521,7 @@ function showEditor(n = null, day = today()) {
   }
   updateRepeatFields();
   $('#delete-note').hidden = !n;
+  window.markEditorSaved?.();
   $('#editor').showModal();
   f.elements.title.focus();
 }
@@ -673,14 +674,14 @@ $('#images').onchange = (e) => {
   detailEditor.addImages(e.target.files);
   e.target.value = '';
 };
-$('#note-form').onsubmit = async (event) => {
-  event.preventDefault();
-  if (busy) return;
+async function saveEditor() {
+  if (!$('#note-form').reportValidity()) return false;
+  if (busy) return false;
   busy = true;
-  const button = event.submitter || $('#note-form button[type="submit"]');
+  const button = $('#note-form button[type="submit"]');
   button.disabled = true;
   try {
-    const form = event.target,
+    const form = $('#note-form'),
       n = {};
     for (const key of ['title', 'category', 'date', 'until', 'repeat', 'time', 'end'])
       n[key] = form.elements[key].value;
@@ -689,6 +690,7 @@ $('#note-form').onsubmit = async (event) => {
     n.weekdays = [...$('#weekdays').querySelectorAll('input:checked')].map((x) => +x.value);
     await detailEditor.pending;
     n.detailContent = detailEditor.serialize();
+    n.detailHtml = detailEditor.serializeHtml();
     n.detail = n.detailContent
       .filter((b) => b.type === 'text')
       .map((b) => b.text)
@@ -700,21 +702,29 @@ $('#note-form').onsubmit = async (event) => {
     }
     if (editing?.private && Date.now() - privateAccessAt > 540000) {
       const access = await unlockPrivate(editing);
-      if (!access) return;
+      if (!access) return false;
       privateAccess = access.accessToken;
       privateAccessAt = Date.now();
     }
     await api('save', n, privateAccess);
+    window.markEditorSaved?.();
     $('#editor').close();
     $('#quick-title').value = '';
     await refresh();
+    window.clearRecoveredDraft?.();
     toast('已保存到本机');
+    return true;
   } catch (error) {
     toast(error.message);
+    return false;
   } finally {
     busy = false;
     button.disabled = false;
   }
+}
+$('#note-form').onsubmit = async (event) => {
+  event.preventDefault();
+  await saveEditor();
 };
 $('#delete-note').onclick = async () => {
   if (!editing || !confirm('删除此事项及所有日期的完成记录？')) return;

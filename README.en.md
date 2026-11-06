@@ -16,6 +16,8 @@ Shiji is a local-first desktop notes and task app, with a Chinese-language inter
 
 ## Highlights
 
+- Bold text and three heading levels, with save/discard/continue prompts for unsaved edits.
+- Manual, weekly or monthly snapshots, exported as standalone HTML with embedded images. Protected exports require password verification.
 - Quick capture, custom categories, search, completion counts, and a month calendar.
 - Paste screenshots or insert images between paragraphs. Browse an item's images with previous/next, zoom, and original-size controls.
 - One-time, daily, weekly, and date-range schedules, including optional recurrence end dates.
@@ -52,7 +54,8 @@ The source can serve the browser UI on other operating systems, but native remin
 - Passwords are salted PBKDF2 hashes; **the SQLite database and backups are not encrypted**. There is no password recovery.
 - LAN access uses HTTP and a connection credential. Use a trusted network; do not expose the port to the internet.
 - The computer must stay on for reminders and phone access. There is no cloud sync, mobile offline mode, or mobile background push.
-- Visibility authorization expires after 15 minutes and closes protected editors; save your changes before expiration.
+- Visibility authorization expires after 15 minutes. Unsaved protected edits are temporarily held in the current window's memory for restoration after reauthentication; reloading or exiting loses this temporary copy. Save your work.
+- Archives do not remove current tasks. Scheduled snapshots require the backend to run; standalone exported HTML is unencrypted.
 
 ```sh
 python -m unittest -v

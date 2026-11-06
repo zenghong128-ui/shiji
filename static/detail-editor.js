@@ -18,6 +18,52 @@ function appendContent(target, blocks) {
     }
   }
 }
+function appendNoteContent(target, note) {
+  if (!note?.detailHtml) {
+    appendContent(target, noteContent(note));
+    return;
+  }
+  const parsed = new DOMParser().parseFromString(note.detailHtml, 'text/html');
+  const allowed = new Set([
+    'P',
+    'DIV',
+    'BR',
+    'STRONG',
+    'B',
+    'H1',
+    'H2',
+    'H3',
+    'EM',
+    'I',
+    'UL',
+    'OL',
+    'LI',
+  ]);
+  const copy = (node, parent) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      parent.append(document.createTextNode(node.textContent));
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    if (['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'SVG', 'TEMPLATE'].includes(node.tagName)) return;
+    if (node.tagName === 'IMG') {
+      const index = Number(node.getAttribute('data-image-index'));
+      if (!Number.isInteger(index) || index < 0 || !note.images?.[index]) return;
+      const image = new Image();
+      image.src = note.images[index];
+      image.alt = '详细信息插图';
+      image.draggable = false;
+      parent.append(image);
+      return;
+    }
+    const element = allowed.has(node.tagName)
+      ? document.createElement(node.tagName.toLowerCase())
+      : parent;
+    if (element !== parent) parent.append(element);
+    [...node.childNodes].forEach((child) => copy(child, element));
+  };
+  [...parsed.body.childNodes].forEach((node) => copy(node, target));
+}
 function openImageViewer(source, returnToEditor) {
   if (!source.naturalWidth) return;
   const container = source.closest('.rich-detail, .rich-preview');
@@ -221,6 +267,7 @@ class DetailEditor {
     this.range = null;
     this.pending = Promise.resolve();
     this.generation = 0;
+    this.pendingImages = 0;
     this.imageSources = new Map();
     element.addEventListener('input', () => this.restoreImageSources());
     document.addEventListener('selectionchange', () => this.remember());
@@ -293,7 +340,7 @@ class DetailEditor {
     this.range = null;
     this.element.replaceChildren();
     this.imageSources.clear();
-    appendContent(this.element, noteContent(note));
+    appendNoteContent(this.element, note);
   }
   insertText(text) {
     this.restore();
@@ -302,6 +349,7 @@ class DetailEditor {
   }
   addImages(files) {
     const batch = [...files];
+    this.pendingImages++;
     const generation = this.generation;
     this.remember();
     // Freeze editing while reading files so text typed during a read cannot move the insertion point.
@@ -374,9 +422,56 @@ class DetailEditor {
       })
       .catch((error) => this.notify(error.message))
       .finally(() => {
+        this.pendingImages = Math.max(0, this.pendingImages - 1);
         this.element.contentEditable = 'true';
       });
     return this.pending;
+  }
+  format(command, value = null) {
+    this.restore();
+    document.execCommand('styleWithCSS', false, false);
+    document.execCommand(command, false, value);
+    this.remember();
+    this.element.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  serializeHtml() {
+    const wrapper = document.createElement('div');
+    let imageIndex = 0;
+    const allowed = new Set([
+      'P',
+      'DIV',
+      'BR',
+      'STRONG',
+      'B',
+      'H1',
+      'H2',
+      'H3',
+      'EM',
+      'I',
+      'UL',
+      'OL',
+      'LI',
+    ]);
+    const walk = (node, parent) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        parent.append(document.createTextNode(node.textContent));
+        return;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      if (node.tagName === 'IMG') {
+        const image = document.createElement('img');
+        image.setAttribute('data-image-index', String(imageIndex++));
+        parent.append(image);
+        return;
+      }
+      const target = allowed.has(node.tagName)
+        ? document.createElement(node.tagName.toLowerCase())
+        : parent;
+      if (target !== parent) parent.append(target);
+      [...node.childNodes].forEach((child) => walk(child, target));
+    };
+    [...this.element.childNodes].forEach((node) => walk(node, wrapper));
+    return wrapper.innerHTML;
   }
   serialize() {
     this.restoreImageSources();
@@ -405,7 +500,7 @@ class DetailEditor {
         return;
       }
       if (node.tagName === 'BR') return text('\n');
-      const block = ['DIV', 'P', 'LI'].includes(node.tagName);
+      const block = ['DIV', 'P', 'LI', 'H1', 'H2', 'H3'].includes(node.tagName);
       if (block) newline();
       const trailingPlaceholder =
         block &&
