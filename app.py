@@ -37,7 +37,7 @@ def visibility_remaining(handler):
     config = privacy_config()
     if not grant or not config or grant[:2] != (str(DATA), config["hash"]):
         return 0
-    return max(0, grant[2] - time.monotonic())
+    return max(0, min(900, grant[2] - time.monotonic()))
 
 
 class PrivacyError(Exception):
