@@ -132,6 +132,8 @@ $('#restore-draft').onclick = async () => {
   const draft = protectedDraft;
   await openEditor(draft.note, draft.day);
   if (!$('#editor').open) return;
+  // Keep the draft's original revision so a later save cannot silently overwrite another window.
+  if (draft.note && editing) editing.updated = draft.note.updated;
   const form = $('#note-form');
   editorCategories.add(draft.values.fields.category);
   updateCategoryOptions(draft.values.fields.category);
