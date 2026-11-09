@@ -7,6 +7,7 @@ import secrets
 import io
 import re
 import zipfile
+import posixpath
 from urllib.parse import quote
 
 from rich_content import sanitize_markup
@@ -173,10 +174,26 @@ def export_directory(row, include_private=False):
     exported_at = dt.datetime.now().isoformat(timespec="seconds")
     timestamp = exported_at.replace("T", "_").replace(":", "-")
     directory = f"Shiji_导出_{timestamp}_{secrets.token_hex(4)}"
+    category_dirs, used_dirs = {}, {"index.html"}
+    for note in notes:
+        category = note.get("category") or "未分类"
+        if category in category_dirs:
+            continue
+        base = safe_filename(category)
+        # Windows device names remain reserved even when followed by an extension.
+        if re.fullmatch(r"CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9]", base.split(".")[0], re.I):
+            base = "_" + base
+        name, suffix = base, 2
+        while name.casefold() in used_dirs:
+            name = f"{base}_{suffix}"
+            suffix += 1
+        used_dirs.add(name.casefold())
+        category_dirs[category] = name
     filenames = [
-        f"{i:03d}_{safe_filename(n['title'])}.html" for i, n in enumerate(notes, 1)
+        f"{category_dirs[n.get('category') or '未分类']}/{i:03d}_{safe_filename(n['title'])}.html"
+        for i, n in enumerate(notes, 1)
     ]
-    files, entries = [], []
+    files, entries = [], {}
     for index, note in enumerate(notes):
         single = dict(
             title=note["title"],
@@ -191,11 +208,14 @@ def export_directory(row, include_private=False):
                 ensure_ascii=False,
             ),
         )
-        links = ['<a href="index.html">返回总目录</a>']
+        folder = posixpath.dirname(filenames[index])
+        links = ['<a href="../index.html">返回总目录</a>']
         if index:
-            links.append(f'<a href="{quote(filenames[index - 1], safe="")}">上一项</a>')
+            previous = posixpath.relpath(filenames[index - 1], folder)
+            links.append(f'<a href="{quote(previous, safe="/")}">上一项</a>')
         if index + 1 < len(notes):
-            links.append(f'<a href="{quote(filenames[index + 1], safe="")}">下一项</a>')
+            following = posixpath.relpath(filenames[index + 1], folder)
+            links.append(f'<a href="{quote(following, safe="/")}">下一项</a>')
         navigation = (
             '<nav style="display:flex;gap:20px;margin:18px 0">'
             + "".join(links)
@@ -205,11 +225,15 @@ def export_directory(row, include_private=False):
             "<body>", "<body>" + navigation, 1
         )
         files.append(dict(name=filenames[index], html=html))
-        entries.append(
-            f'<li><a href="{quote(filenames[index], safe="")}">{escape(note["title"])}</a><p>{escape(note.get("category", "未分类"))} · {escape(note["date"])}</p></li>'
+        entries.setdefault(note.get("category") or "未分类", []).append(
+            f'<li><a href="{quote(filenames[index], safe="/")}">{escape(note["title"])}</a><p>{escape(note.get("category", "未分类"))} · {escape(note["date"])}</p></li>'
         )
     title = escape(row["title"])
-    index_html = f"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>{title} · 目录</title><style>body{{font:15px/1.8 system-ui,sans-serif;background:#f4f7fb;color:#243449;max-width:1000px;margin:40px auto;padding:0 22px}}h1{{font-size:28px}}ol{{padding:0;list-style:none;counter-reset:notes}}li{{background:white;border:1px solid #dce5f2;border-radius:8px;margin:12px 0;padding:18px 22px}}a{{color:#3567c8;font-size:17px;font-weight:600;overflow-wrap:anywhere}}p{{color:#6d809b;font-size:13px}}</style></head><body><h1>{title}</h1><p>存档时间：{escape(row["created"])} · 共 {len(notes)} 条事项 · {"包含受保护内容，文件未加密" if include_private else "不包含受保护事项"}</p><p>每个事项都是独立 HTML，图片内嵌，可离线阅读。点击名称查看。</p><ol>{"".join(entries)}</ol></body></html>"""
+    grouped = "".join(
+        f"<section><h2>{escape(category)}（{len(items)}）</h2><ol>{''.join(items)}</ol></section>"
+        for category, items in entries.items()
+    )
+    index_html = f"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>{title} · 目录</title><style>body{{font:15px/1.8 system-ui,sans-serif;background:#f4f7fb;color:#243449;max-width:1000px;margin:40px auto;padding:0 22px}}h1{{font-size:28px}}ol{{padding:0;list-style:none;counter-reset:notes}}li{{background:white;border:1px solid #dce5f2;border-radius:8px;margin:12px 0;padding:18px 22px}}a{{color:#3567c8;font-size:17px;font-weight:600;overflow-wrap:anywhere}}p{{color:#6d809b;font-size:13px}}</style></head><body><h1>{title}</h1><p>存档时间：{escape(row["created"])} · 共 {len(notes)} 条事项 · {"包含受保护内容，文件未加密" if include_private else "不包含受保护事项"}</p><p>每个事项都是独立 HTML，图片内嵌，可离线阅读。点击名称查看。</p>{grouped}</body></html>"""
     # Write the index last so an interrupted export cannot look like a complete one.
     index_html = index_html.replace(
         "<p>存档时间：", f"<p>导出时间：{exported_at} · 数据时间：", 1

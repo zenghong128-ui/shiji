@@ -65,4 +65,4 @@ python -m unittest -v
 
 ### Export all current notes
 
-Use **Export all current notes** in the archive panel to export live records, including completed notes, regardless of category, status or search filters. Choose a root folder: a new export-time-stamped directory contains one standalone HTML per note plus `index.html`. Images are embedded. A ZIP fallback provides the same folder structure. Protected notes require password verification for a complete export; files are not encrypted. Historical snapshots remain separate and contain only the records captured at that time.
+Use **Export all current notes** in the archive panel to export live records, including completed notes, regardless of category, status or search filters. Choose a root folder: a new export-time-stamped directory groups notes into category subfolders with one standalone HTML per note plus `index.html`. Images are embedded. A ZIP fallback provides the same folder structure. Protected notes require password verification for a complete export; files are not encrypted. Historical snapshots remain separate and contain only the records captured at that time.

@@ -42,10 +42,10 @@ node --check static/enhancements.js
 ```powershell
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements-build.txt
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/build_windows.ps1 -Version 1.2.0
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/build_windows.ps1 -Version 1.2.1
 ```
 
-输出为 `release/Shiji-v1.2.0-windows-x64.zip`。包中包含 `Shiji.exe`、停止脚本、局域网启动脚本、说明及许可证。使用 PyInstaller one-file 打包；静态资源进入程序包，用户数据写入 `%LOCALAPPDATA%\Shiji`，不会写入临时解包目录。
+输出为 `release/Shiji-v1.2.1-windows-x64.zip`。包中包含 `Shiji.exe`、停止脚本、局域网启动脚本、说明及许可证。使用 PyInstaller one-file 打包；静态资源进入程序包，用户数据写入 `%LOCALAPPDATA%\Shiji`，不会写入临时解包目录。
 
 发行包不包含任何示例数据库、密码、连接密钥或用户记录。目前未进行代码签名。
 

@@ -259,7 +259,7 @@ function updateExportRootLabel() {
   $('#archive-choose-root').disabled = !supportsDirectoryExport() || archiveExportBusy;
   $('#archive-export-submit').disabled = !supportsDirectoryExport() || archiveExportBusy;
   $('#archive-export-location-hint').textContent = supportsDirectoryExport()
-    ? '将在所选位置新建独立存档文件夹，每个事项一份 HTML，并附 index.html 总目录。'
+    ? '将在所选位置新建独立存档文件夹，按分类生成子目录，每个事项一份 HTML，并附 index.html 总目录。'
     : '当前浏览器无法直接选择目录，请下载完整目录 ZIP，解压到需要的位置。';
 }
 function storeExportRoot(handle) {
@@ -315,6 +315,17 @@ $('#archive-choose-root').onclick = async () => {
   }
 };
 async function writeArchiveDirectory(root, bundle) {
+  const paths = bundle.files.map((item) => {
+    const parts = item.name.split('/');
+    if (
+      parts.length > 2 ||
+      parts.some(
+        (part) => !part || part === '.' || part === '..' || /[\\:*?"<>|\x00-\x1f]/.test(part),
+      )
+    )
+      throw Error('导出文件路径不正确');
+    return parts;
+  });
   let name = bundle.directory;
   for (let suffix = 0; suffix < 1000; suffix++) {
     name = bundle.directory + (suffix ? '-' + (suffix + 1) : '');
@@ -326,11 +337,13 @@ async function writeArchiveDirectory(root, bundle) {
       if (error.name !== 'NotFoundError') throw error;
     }
     const directory = await root.getDirectoryHandle(name, { create: true });
-    for (const item of bundle.files) {
-      // The server emits simple file names. Reject paths before touching the selected directory.
-      if (!item.name || item.name === '.' || item.name === '..' || /[\\/]/.test(item.name))
-        throw Error('导出文件名不正确');
-      const file = await directory.getFileHandle(item.name, { create: true });
+    for (const [index, item] of bundle.files.entries()) {
+      const parts = paths[index];
+      const parent =
+        parts.length === 2
+          ? await directory.getDirectoryHandle(parts[0], { create: true })
+          : directory;
+      const file = await parent.getFileHandle(parts.at(-1), { create: true });
       const writable = await file.createWritable();
       try {
         await writable.write(item.html);

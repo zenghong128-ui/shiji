@@ -377,7 +377,8 @@ class NotesTest(unittest.TestCase):
         names = [item["name"] for item in bundle["files"]]
         self.assertEqual(len(set(names)), 3)
         for name in names:
-            self.assertNotRegex(name, r'[<>:"/\\|?*]')
+            for component in name.split("/"):
+                self.assertNotRegex(component, r'[<>:"/\\|?*]')
             self.assertTrue(name.endswith(".html"))
         pages = bundle["files"][:-1]
         self.assertEqual(sum("First unique body" in page["html"] for page in pages), 1)
@@ -393,9 +394,78 @@ class NotesTest(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(zipped)) as archive:
             entries = archive.namelist()
             self.assertEqual(len(entries), 3)
-            self.assertTrue(all(len(name.split("/")) == 2 for name in entries))
+            self.assertTrue(
+                all(
+                    len(name.split("/")) == (2 if name.endswith("/index.html") else 3)
+                    for name in entries
+                )
+            )
             self.assertEqual(len({name.split("/")[0] for name in entries}), 1)
             self.assertTrue(any(name.endswith("/index.html") for name in entries))
+
+    def test_category_export_folders_avoid_collisions_and_keep_navigation_valid(self):
+        import posixpath
+        from html.parser import HTMLParser
+
+        class Links(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.links = []
+
+            def handle_starttag(self, tag, attrs):
+                if tag == "a":
+                    self.links.append(dict(attrs)["href"])
+
+        categories = [
+            "产品项目",
+            "部门工作",
+            "由己及人",
+            "",
+            "A/B",
+            "A:B",
+            "Case",
+            "case",
+            "CON",
+            "index.html",
+            "..",
+        ]
+        for i, category in enumerate(categories):
+            self.request(
+                "save", dict(self.note(), title=f"Item {i}", category=category)
+            )
+        code, bundle = self.request(
+            "archives/export", {"scope": "current", "format": "directory"}
+        )
+        self.assertEqual(code, 200)
+        files = {item["name"]: item["html"] for item in bundle["files"]}
+        folders = [name.split("/")[0] for name in files if name != "index.html"]
+        self.assertEqual(
+            len(set(folder.casefold() for folder in folders)), len(categories)
+        )
+        self.assertTrue(
+            {"产品项目", "部门工作", "由己及人", "未分类"}.issubset(folders)
+        )
+        self.assertNotIn("CON", folders)
+        self.assertNotIn("index.html", folders)
+        for name, html in files.items():
+            self.assertTrue(
+                all(part not in ("", ".", "..") for part in name.split("/"))
+            )
+            parser = Links()
+            parser.feed(html)
+            for href in parser.links:
+                target = posixpath.normpath(
+                    posixpath.join(posixpath.dirname(name), unquote(href))
+                )
+                self.assertIn(target, files, f"{name} links to missing {target}")
+        self.assertIn("<h2>产品项目（1）</h2>", files["index.html"])
+        zipped = self.request(
+            "archives/export", {"scope": "current", "format": "zip"}, raw=True
+        )[1]
+        with zipfile.ZipFile(io.BytesIO(zipped)) as output:
+            self.assertEqual(
+                {name.split("/", 1)[1] for name in output.namelist()}, set(files)
+            )
 
     def test_directory_export_keeps_protected_titles_out_without_authorization(self):
         self.request("privacy/password", {"newPassword": "secret123"})
