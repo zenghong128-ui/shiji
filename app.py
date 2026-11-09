@@ -376,6 +376,7 @@ class Handler(BaseHTTPRequestHandler):
                         {
                             "archives": archives.list_archives(db),
                             "schedule": archives.schedule(db),
+                            "current": archives.current_summary(db),
                         },
                     )
             if path == "/api/privacy/settings":
@@ -532,16 +533,41 @@ class Handler(BaseHTTPRequestHandler):
                 elif path == "/api/archives/schedule":
                     archives.configure(db, body.get("frequency", "off"))
                 elif path == "/api/archives/export":
-                    row = db.execute(
-                        "SELECT * FROM archives WHERE id=?", (body.get("id", ""),)
-                    ).fetchone()
+                    current = body.get("scope") == "current"
+                    row = (
+                        archives.capture(db, "当前全部事项")
+                        if current
+                        else db.execute(
+                            "SELECT * FROM archives WHERE id=?", (body.get("id", ""),)
+                        ).fetchone()
+                    )
                     if not row:
                         raise ValueError("存档不存在")
                     include_private = bool(body.get("includePrivate", False))
+                    if (
+                        current
+                        and not include_private
+                        and any(
+                            n.get("private") for n in json.loads(row["body"])["notes"]
+                        )
+                    ):
+                        raise ValueError(
+                            "当前全部事项中包含受保护事项，请重新打开导出并验证密码后完整导出"
+                        )
                     if include_private:
                         if not visibility_remaining(self):
                             raise PrivacyError("请先开启显示开关，再导出受保护内容")
                         check_password(body.get("password", ""), self.client_address[0])
+                    export_format = body.get("format", "html")
+                    if export_format in ("directory", "zip"):
+                        bundle = archives.export_directory(row, include_private)
+                        if export_format == "zip":
+                            return self.send(
+                                200, archives.export_zip(bundle), "application/zip"
+                            )
+                        return self.send(200, bundle)
+                    if export_format != "html":
+                        raise ValueError("不支持的导出格式")
                     return self.send(
                         200,
                         {

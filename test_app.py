@@ -1,5 +1,8 @@
 import datetime as dt
 import json
+import io
+import zipfile
+from urllib.parse import unquote
 from pathlib import Path
 import tempfile
 import threading
@@ -30,7 +33,13 @@ class NotesTest(unittest.TestCase):
         self.temp.cleanup()
 
     def request(
-        self, path, body=None, auth=True, privacy_token=None, visibility_token=None
+        self,
+        path,
+        body=None,
+        auth=True,
+        privacy_token=None,
+        visibility_token=None,
+        raw=False,
     ):
         headers = {"Content-Type": "application/json"}
         if auth:
@@ -49,7 +58,7 @@ class NotesTest(unittest.TestCase):
         )
         try:
             with urllib.request.urlopen(req) as r:
-                return r.status, json.load(r)
+                return r.status, r.read() if raw else json.load(r)
         except urllib.error.HTTPError as e:
             return e.code, json.load(e)
 
@@ -347,6 +356,151 @@ class NotesTest(unittest.TestCase):
         )
         self.assertEqual(code, 200)
         self.assertIn("Protected archive body", result["html"])
+
+    def test_directory_export_has_one_html_per_note_safe_names_and_index(self):
+        self.request(
+            "save",
+            dict(self.note(), title="同名:/特殊*事项", detail="First unique body"),
+        )
+        self.request(
+            "save",
+            dict(self.note(), title="同名:/特殊*事项", detail="Second unique body"),
+        )
+        archive_id = self.request("archives/create", {})[1]["id"]
+        code, bundle = self.request(
+            "archives/export", {"id": archive_id, "format": "directory"}
+        )
+        self.assertEqual(code, 200)
+        self.assertEqual(bundle["count"], 2)
+        self.assertEqual(len(bundle["files"]), 3)
+        self.assertEqual(bundle["files"][-1]["name"], "index.html")
+        names = [item["name"] for item in bundle["files"]]
+        self.assertEqual(len(set(names)), 3)
+        for name in names:
+            self.assertNotRegex(name, r'[<>:"/\\|?*]')
+            self.assertTrue(name.endswith(".html"))
+        pages = bundle["files"][:-1]
+        self.assertEqual(sum("First unique body" in page["html"] for page in pages), 1)
+        self.assertEqual(sum("Second unique body" in page["html"] for page in pages), 1)
+        self.assertIn("返回总目录", pages[0]["html"])
+        self.assertIn("index.html", pages[0]["html"])
+        for name in names[:-1]:
+            self.assertIn(name, unquote(bundle["files"][-1]["html"]))
+        code, zipped = self.request(
+            "archives/export", {"id": archive_id, "format": "zip"}, raw=True
+        )
+        self.assertEqual(code, 200)
+        with zipfile.ZipFile(io.BytesIO(zipped)) as archive:
+            entries = archive.namelist()
+            self.assertEqual(len(entries), 3)
+            self.assertTrue(all(len(name.split("/")) == 2 for name in entries))
+            self.assertEqual(len({name.split("/")[0] for name in entries}), 1)
+            self.assertTrue(any(name.endswith("/index.html") for name in entries))
+
+    def test_directory_export_keeps_protected_titles_out_without_authorization(self):
+        self.request("privacy/password", {"newPassword": "secret123"})
+        self.request(
+            "save", dict(self.note(), private=True, title="Secret exported title")
+        )
+        archive_id = self.request("archives/create", {})[1]["id"]
+        response = self.request(
+            "archives/export", {"id": archive_id, "format": "directory"}
+        )[1]
+        self.assertEqual(response["count"], 0)
+        self.assertNotIn("Secret exported title", json.dumps(response))
+        self.assertEqual(
+            self.request(
+                "archives/export",
+                {
+                    "id": archive_id,
+                    "format": "directory",
+                    "includePrivate": True,
+                    "password": "secret123",
+                },
+            )[0],
+            403,
+        )
+        self.enable_visibility()
+        response = self.request(
+            "archives/export",
+            {
+                "id": archive_id,
+                "format": "directory",
+                "includePrivate": True,
+                "password": "secret123",
+            },
+        )[1]
+        self.assertEqual(response["count"], 1)
+        self.assertIn("Secret exported title", json.dumps(response))
+
+    def test_current_export_uses_all_live_notes_instead_of_old_snapshot(self):
+        for i in range(4):
+            self.request("save", dict(self.note(), title=f"Early {i}"))
+        archive_id = self.request("archives/create", {})[1]["id"]
+        for i in range(5):
+            self.request("save", dict(self.note(), title=f"New {i}", category="Other"))
+        note = self.request("state")[1]["notes"][0]
+        self.request("complete", dict(id=note["id"], day=note["date"], done=True))
+        code, bundle = self.request(
+            "archives/export",
+            dict(
+                scope="current",
+                format="directory",
+                category="missing",
+                status="pending",
+                search="missing",
+            ),
+        )
+        self.assertEqual(code, 200)
+        self.assertEqual(bundle["count"], 9)
+        self.assertEqual(bundle["totalCount"], 9)
+        self.assertEqual(bundle["excludedCount"], 0)
+        self.assertEqual(len(bundle["files"]), 10)
+        self.assertEqual(
+            sum(page["html"].count("<article>") for page in bundle["files"]), 9
+        )
+        self.assertTrue(
+            any(
+                f"已完成日期：{note['date']}" in page["html"]
+                for page in bundle["files"]
+            )
+        )
+        self.assertRegex(
+            bundle["directory"], r"^Shiji_导出_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_"
+        )
+        self.assertIn(bundle["exportedAt"], bundle["files"][-1]["html"])
+        response = self.request("archives")[1]
+        self.assertEqual(response["current"]["count"], 9)
+        self.assertEqual(len(response["archives"]), 1)
+        self.assertEqual(response["archives"][0]["count"], 4)
+        old = self.request("archives/export", dict(id=archive_id, format="directory"))[
+            1
+        ]
+        self.assertEqual(old["count"], 4)
+        code, zipped = self.request(
+            "archives/export", dict(scope="current", format="zip"), raw=True
+        )
+        self.assertEqual(code, 200)
+        with zipfile.ZipFile(io.BytesIO(zipped)) as archive:
+            self.assertEqual(len(archive.namelist()), 10)
+
+    def test_current_full_export_never_silently_omits_protected_notes(self):
+        self.request("privacy/password", {"newPassword": "secret123"})
+        self.request("save", dict(self.note(), title="Public"))
+        self.request("save", dict(self.note(), title="Protected", private=True))
+        body = dict(scope="current", format="directory")
+        self.assertEqual(self.request("archives/export", body)[0], 400)
+        body.update(includePrivate=True, password="secret123")
+        self.assertEqual(self.request("archives/export", body)[0], 403)
+        self.enable_visibility()
+        self.assertEqual(
+            self.request("archives/export", dict(body, password="wrong"))[0], 403
+        )
+        code, bundle = self.request("archives/export", body)
+        self.assertEqual(code, 200)
+        self.assertEqual(bundle["count"], 2)
+        self.assertEqual(bundle["excludedCount"], 0)
+        self.assertEqual(len(bundle["files"]), 3)
 
     def test_scheduled_archives_once_per_month_or_week(self):
         with app.connect() as db:

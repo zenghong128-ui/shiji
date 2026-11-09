@@ -62,3 +62,7 @@ python -m unittest -v
 ```
 
 [Development](docs/DEVELOPMENT.md) · [Contributing](CONTRIBUTING.md) · [Issues](https://github.com/zenghong128-ui/shiji/issues) · [MIT terms](LICENSE)
+
+### Export all current notes
+
+Use **Export all current notes** in the archive panel to export live records, including completed notes, regardless of category, status or search filters. Choose a root folder: a new export-time-stamped directory contains one standalone HTML per note plus `index.html`. Images are embedded. A ZIP fallback provides the same folder structure. Protected notes require password verification for a complete export; files are not encrypted. Historical snapshots remain separate and contain only the records captured at that time.

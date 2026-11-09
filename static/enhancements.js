@@ -153,10 +153,14 @@ $('#restore-draft').onclick = async () => {
 };
 
 let archiveState = [],
-  exportingArchive = null;
+  exportingArchive = null,
+  currentExportSummary = { count: 0, hasProtected: false };
 async function loadArchives() {
   const response = await api('archives');
   archiveState = response.archives;
+  currentExportSummary = response.current;
+  $('#archive-current-count').textContent =
+    `当前共 ${currentExportSummary.count} 条事项（包括已完成和受保护事项），导出不受页面筛选影响。`;
   $('#archive-frequency').value = response.schedule.frequency;
   const list = $('#archive-list');
   list.replaceChildren();
@@ -169,22 +173,37 @@ async function loadArchives() {
       text = el('div'),
       title = el('strong', '', item.title);
     text.append(title, el('p', 'hint', `${item.created.replace('T', ' ')} · ${item.count} 条事项`));
-    const exportButton = el('button', '', '导出 HTML');
+    const exportButton = el('button', '', '导出此历史快照');
     exportButton.type = 'button';
-    exportButton.onclick = () => {
-      exportingArchive = item;
-      $('#archive-export-form').reset();
-      $('#archive-export-title').textContent = item.title;
-      $('#archive-password-field').hidden = true;
-      $('#archive-export-password').required = false;
-      $('#archive-export-error').textContent = '';
-      $('#archive-include-private').disabled = !item.hasProtected;
-      $('#archive-export-dialog').showModal();
-    };
+    exportButton.onclick = () => openArchiveExport(item);
     row.append(text, exportButton);
     list.append(row);
   }
 }
+function openArchiveExport(item) {
+  exportingArchive = item;
+  $('#archive-export-form').reset();
+  updateExportRootLabel();
+  const include = $('#archive-include-private');
+  include.checked = item.scope === 'current' && item.hasProtected;
+  include.disabled = item.scope === 'current' || !item.hasProtected;
+  $('#archive-export-title').textContent =
+    item.scope === 'current'
+      ? `当前全部事项 · 当前共 ${item.count} 条。按点击导出时的最新数据生成，包括已完成事项；每个事项一份 HTML。`
+      : `${item.title} · 历史快照 ${item.count} 条，并非当前全部事项。`;
+  $('#archive-password-field').hidden = !include.checked;
+  $('#archive-export-password').required = include.checked;
+  $('#archive-export-error').textContent = '';
+  $('#archive-export-dialog').showModal();
+}
+$('#archive-export-current').onclick = async () => {
+  try {
+    await loadArchives();
+    openArchiveExport({ ...currentExportSummary, scope: 'current', id: 'current' });
+  } catch (error) {
+    toast(error.message);
+  }
+};
 $('#archives-open').onclick = async () => {
   try {
     await loadArchives();
@@ -229,32 +248,180 @@ $('#archive-export-dialog').addEventListener('close', () => {
   $('#archive-export-form').reset();
   $('#archive-export-error').textContent = '';
 });
-$('#archive-export-form').onsubmit = async (event) => {
-  event.preventDefault();
-  const button = event.submitter;
-  button.disabled = true;
+let archiveRoot = null,
+  archiveRootRevision = 0,
+  archiveExportBusy = false;
+function supportsDirectoryExport() {
+  return typeof window.showDirectoryPicker === 'function';
+}
+function updateExportRootLabel() {
+  $('#archive-export-root').textContent = archiveRoot ? archiveRoot.name : '尚未选择目录';
+  $('#archive-choose-root').disabled = !supportsDirectoryExport() || archiveExportBusy;
+  $('#archive-export-submit').disabled = !supportsDirectoryExport() || archiveExportBusy;
+  $('#archive-export-location-hint').textContent = supportsDirectoryExport()
+    ? '将在所选位置新建独立存档文件夹，每个事项一份 HTML，并附 index.html 总目录。'
+    : '当前浏览器无法直接选择目录，请下载完整目录 ZIP，解压到需要的位置。';
+}
+function storeExportRoot(handle) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('shiji-export-preferences', 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('directories');
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result,
+        transaction = db.transaction('directories', handle ? 'readwrite' : 'readonly');
+      const operation = handle
+        ? transaction.objectStore('directories').put(handle, 'archiveRoot')
+        : transaction.objectStore('directories').get('archiveRoot');
+      transaction.oncomplete = () => {
+        db.close();
+        resolve(operation.result);
+      };
+      transaction.onerror = () => {
+        db.close();
+        reject(transaction.error);
+      };
+    };
+  });
+}
+const initialRootRevision = archiveRootRevision;
+storeExportRoot(null)
+  .then((handle) => {
+    if (handle && archiveRootRevision === initialRootRevision) {
+      archiveRoot = handle;
+      updateExportRootLabel();
+    }
+  })
+  .catch(() => {});
+async function chooseExportRoot() {
+  const handle = await window.showDirectoryPicker({
+    id: 'shiji-archive-export',
+    mode: 'readwrite',
+    ...(archiveRoot ? { startIn: archiveRoot } : { startIn: 'documents' }),
+  });
+  archiveRoot = handle;
+  archiveRootRevision++;
+  updateExportRootLabel();
+  storeExportRoot(handle).catch(() => {});
+  return handle;
+}
+$('#archive-choose-root').onclick = async () => {
   try {
-    const result = await api('archives/export', {
-      id: exportingArchive.id,
-      includePrivate: $('#archive-include-private').checked,
-      password: $('#archive-export-password').value,
-    });
-    const url = URL.createObjectURL(new Blob([result.html], { type: 'text/html;charset=utf-8' })),
-      link = document.createElement('a');
-    link.href = url;
-    link.download = result.filename;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 30000);
-    $('#archive-export-dialog').close();
-    toast('HTML 已导出，图片已内嵌，可离线查看');
+    await chooseExportRoot();
+    $('#archive-export-error').textContent = '';
   } catch (error) {
-    $('#archive-export-error').textContent = error.message;
-  } finally {
-    button.disabled = false;
+    if (error.name !== 'AbortError')
+      $('#archive-export-error').textContent = '无法选择目录，请重新选择或下载目录 ZIP。';
   }
 };
+async function writeArchiveDirectory(root, bundle) {
+  let name = bundle.directory;
+  for (let suffix = 0; suffix < 1000; suffix++) {
+    name = bundle.directory + (suffix ? '-' + (suffix + 1) : '');
+    try {
+      await root.getDirectoryHandle(name);
+      continue;
+    } catch (error) {
+      if (error.name === 'TypeMismatchError') continue;
+      if (error.name !== 'NotFoundError') throw error;
+    }
+    const directory = await root.getDirectoryHandle(name, { create: true });
+    for (const item of bundle.files) {
+      // The server emits simple file names. Reject paths before touching the selected directory.
+      if (!item.name || item.name === '.' || item.name === '..' || /[\\/]/.test(item.name))
+        throw Error('导出文件名不正确');
+      const file = await directory.getFileHandle(item.name, { create: true });
+      const writable = await file.createWritable();
+      try {
+        await writable.write(item.html);
+        await writable.close();
+      } catch (error) {
+        await writable.abort().catch(() => {});
+        throw error;
+      }
+    }
+    return name;
+  }
+  throw Error('同名存档目录过多，请选择其他根目录');
+}
+function downloadExport(blob, filename) {
+  const url = URL.createObjectURL(blob),
+    link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+async function exportArchive(mode) {
+  if (archiveExportBusy || !$('#archive-export-form').reportValidity()) return;
+  archiveExportBusy = true;
+  $('#archive-export-submit').disabled = true;
+  $('#archive-export-zip').disabled = true;
+  $('#archive-choose-root').disabled = true;
+  $('#archive-export-error').textContent = '';
+  try {
+    // Request directory permission while still handling the click, before network/HTML work.
+    let root = null;
+    if (mode === 'directory') {
+      if (!supportsDirectoryExport()) throw Error('请使用下载目录 ZIP');
+      root = archiveRoot || (await chooseExportRoot());
+      if ((await root.requestPermission({ mode: 'readwrite' })) !== 'granted')
+        throw Error('需要所选目录的写入权限，也可以下载目录 ZIP');
+    }
+    if ($('#archive-include-private').checked && !visibilityToken) {
+      if (exportingArchive.scope !== 'current') throw Error('请先开启眼睛开关，再导出受保护内容');
+      const access = await api('privacy/visibility/open', {
+        password: $('#archive-export-password').value,
+      });
+      enableVisibility(access);
+    }
+    const body = {
+      id: exportingArchive.id,
+      scope: exportingArchive.scope,
+      includePrivate: $('#archive-include-private').checked,
+      password: $('#archive-export-password').value,
+      format: mode,
+    };
+    if (mode === 'zip') {
+      const response = await fetch('/api/archives/export', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(visibilityToken ? { 'X-Visibility-Token': visibilityToken } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw Error((await response.json()).error || '导出失败');
+      downloadExport(
+        await response.blob(),
+        'Shiji_导出_' + new Date().toISOString().replace(/[:.]/g, '-') + '.zip',
+      );
+      $('#archive-export-dialog').close();
+      toast('完整目录 ZIP 已下载，解压后打开 index.html 查看');
+    } else {
+      const bundle = await api('archives/export', body);
+      const name = await writeArchiveDirectory(root, bundle);
+      $('#archive-export-dialog').close();
+      toast(`已导出 ${bundle.count} 条事项到「${root.name}/${name}」，打开 index.html 查看`);
+    }
+  } catch (error) {
+    if (error.name !== 'AbortError')
+      $('#archive-export-error').textContent =
+        error.message + '。若目录已部分写入，可重新导出；新导出不会覆盖旧目录。';
+  } finally {
+    archiveExportBusy = false;
+    $('#archive-export-zip').disabled = false;
+    updateExportRootLabel();
+  }
+}
+$('#archive-export-form').onsubmit = async (event) => {
+  event.preventDefault();
+  await exportArchive('directory');
+};
+$('#archive-export-zip').onclick = () => exportArchive('zip');
+updateExportRootLabel();
 
 document.addEventListener('selectionchange', () => {
   const selection = getSelection();

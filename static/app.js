@@ -29,6 +29,9 @@ let toastTimer,
   privateCompletedDays = [],
   privateContextDay = '';
 function toast(message) {
+  // Modal dialogs occupy the browser top layer; body-level notices sit behind them.
+  const dialogs = [...document.querySelectorAll('dialog[open]')];
+  (dialogs.at(-1) || document.body).append($('#toast'));
   $('#toast').textContent = message;
   $('#toast').style.display = 'block';
   clearTimeout(toastTimer);
@@ -297,6 +300,36 @@ function render() {
   renderCalendar();
 }
 function renderCalendar() {
+  let filterSummary = $('#calendar-filter-summary');
+  if (!filterSummary) {
+    filterSummary = el('div', 'calendar-filter-summary');
+    filterSummary.id = 'calendar-filter-summary';
+    filterSummary.setAttribute('role', 'status');
+    $('#calendar-view').prepend(filterSummary);
+  }
+  const filters = [];
+  if (category) filters.push(`分类：${category}`);
+  if (status !== 'all')
+    filters.push(`状态：${{ pending: '待完成', done: '已完成', overdue: '已逾期' }[status]}`);
+  if ($('#search').value) filters.push(`搜索：${$('#search').value}`);
+  filterSummary.replaceChildren(
+    el(
+      'span',
+      '',
+      filters.length
+        ? `当前筛选 · ${filters.join(' · ')}`
+        : '所有分类 · 全部状态（包含已完成事项）',
+    ),
+  );
+  if (filters.length) {
+    const clear = el('button', '', '显示全部事项');
+    clear.type = 'button';
+    clear.onclick = () => {
+      resetCalendarFilters();
+      render();
+    };
+    filterSummary.append(clear);
+  }
   $('#month-label').textContent = `${month.getFullYear()} 年 ${month.getMonth() + 1} 月`;
   const first = new Date(month.getFullYear(), month.getMonth(), 1, 12);
   first.setDate(first.getDate() - ((first.getDay() + 6) % 7));
@@ -490,6 +523,8 @@ function showEditor(n = null, day = today()) {
   detailEditor.load(n);
   const f = $('#note-form');
   f.reset();
+  $('#save-error').hidden = true;
+  $('#save-error').textContent = '';
   editorCategories = new Set(n?.category ? [n.category] : []);
   updateCategoryOptions(n?.category || '未分类');
   $('#new-category-row').hidden = true;
@@ -675,6 +710,14 @@ $('#images').onchange = (e) => {
   e.target.value = '';
 };
 async function saveEditor() {
+  const form = $('#note-form');
+  $('#save-error').hidden = true;
+  $('#save-error').textContent = '';
+  if (form.elements.remind.checked && !form.elements.time.value) {
+    showSaveError('开启“到时弹窗提醒”后，请填写开始时间；如不需要提醒，请取消勾选。');
+    form.elements.time.focus();
+    return false;
+  }
   if (!$('#note-form').reportValidity()) return false;
   if (busy) return false;
   busy = true;
@@ -715,12 +758,18 @@ async function saveEditor() {
     toast('已保存到本机');
     return true;
   } catch (error) {
-    toast(error.message);
+    showSaveError(error.message || '保存失败，请重试。当前编辑内容仍然保留。');
     return false;
   } finally {
     busy = false;
     button.disabled = false;
   }
+}
+function showSaveError(message) {
+  const notice = $('#save-error');
+  notice.textContent = message;
+  notice.hidden = false;
+  notice.scrollIntoView({ block: 'nearest' });
 }
 $('#note-form').onsubmit = async (event) => {
   event.preventDefault();
@@ -778,9 +827,15 @@ document.querySelectorAll('[data-view]').forEach(
   (b) =>
     (b.onclick = () => {
       view = b.dataset.view;
+      if (view === 'calendar') resetCalendarFilters();
       render();
     }),
 );
+function resetCalendarFilters() {
+  category = '';
+  status = 'all';
+  $('#search').value = '';
+}
 document.querySelectorAll('[data-status]').forEach(
   (b) =>
     (b.onclick = () => {

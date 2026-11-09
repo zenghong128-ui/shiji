@@ -2,6 +2,8 @@
 
 import argparse
 import json
+import io
+import zipfile
 import os
 from pathlib import Path
 import subprocess
@@ -80,6 +82,22 @@ def main():
             )
             assert "Release smoke test" in exported["html"]
             assert "Content-Security-Policy" in exported["html"]
+            bundle = json.loads(
+                request(
+                    "/api/archives/export",
+                    {"scope": "current", "format": "directory"},
+                    token,
+                )
+            )
+            assert bundle["count"] == bundle["totalCount"] == 1
+            assert len(bundle["files"]) == 2
+            assert bundle["files"][-1]["name"] == "index.html"
+            assert bundle["directory"].startswith("Shiji_导出_")
+            zipped = request(
+                "/api/archives/export", {"scope": "current", "format": "zip"}, token
+            )
+            with zipfile.ZipFile(io.BytesIO(zipped)) as archive:
+                assert len(archive.namelist()) == 2
             subprocess.run(
                 [str(executable), "--stop", "--port", str(args.port)],
                 env=environment,

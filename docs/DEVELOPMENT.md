@@ -42,10 +42,10 @@ node --check static/enhancements.js
 ```powershell
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements-build.txt
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/build_windows.ps1 -Version 1.1.1
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/build_windows.ps1 -Version 1.2.0
 ```
 
-输出为 `release/Shiji-v1.1.1-windows-x64.zip`。包中包含 `Shiji.exe`、停止脚本、局域网启动脚本、说明及许可证。使用 PyInstaller one-file 打包；静态资源进入程序包，用户数据写入 `%LOCALAPPDATA%\Shiji`，不会写入临时解包目录。
+输出为 `release/Shiji-v1.2.0-windows-x64.zip`。包中包含 `Shiji.exe`、停止脚本、局域网启动脚本、说明及许可证。使用 PyInstaller one-file 打包；静态资源进入程序包，用户数据写入 `%LOCALAPPDATA%\Shiji`，不会写入临时解包目录。
 
 发行包不包含任何示例数据库、密码、连接密钥或用户记录。目前未进行代码签名。
 
@@ -56,3 +56,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/build_windows.ps1 -Ver
 ## 发布
 
 先更新版本记录、运行测试并检查待提交文件，再推送版本标签。手动工作流可构建 Windows 包作为 Actions artifact，维护者验证后附到 Release。公开源码与二进制应对应同一提交，并提供 SHA-256 校验文件。
+
+### 导出回归
+
+`test_app.py` 验证旧快照4条、当前9条的差异、已完成记录、完整导出授权、Windows文件名与ZIP结构。`tools/full_export_regression.js` 与 `tools/calendar_completed_regression.js` 只允许在8774端口独立测试实例运行。浏览器脚本的中文源文件需按UTF-8传给eval。目录写入可用OPFS真实FileSystemDirectoryHandle测试，避免操作用户的真实导出位置。

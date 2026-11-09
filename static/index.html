@@ -194,6 +194,7 @@
           <p id="private-completion-day"></p>
           <button id="private-complete" type="button">标记这次完成</button>
         </div>
+        <p id="save-error" class="save-error" role="alert" hidden></p>
         <div class="form-actions">
           <button type="button" id="delete-note" class="danger" hidden>删除整个事项</button
           ><button type="submit" class="primary">保存事项</button>
@@ -292,6 +293,7 @@
         存档保存当时的全部事项、图片与完成记录，不删除当前事项。数据保存在本机数据库。
       </p>
       <div class="archive-controls">
+        <button id="archive-export-current" class="primary" type="button">导出当前全部事项</button>
         <button id="archive-create" class="primary" type="button">立即存档全部事项</button
         ><label
           >定期存档<select id="archive-frequency">
@@ -304,26 +306,42 @@
       <p class="hint">
         定期存档需要后台运行，错过时在下次运行后生成当期快照，不补造过去数据。默认关闭。
       </p>
+      <p id="archive-current-count" class="hint"></p>
+      <h3>历史存档快照</h3>
+      <p class="hint">以下仅包含各自存档时的记录。需要最新全部记录，请使用「导出当前全部事项」。</p>
       <div id="archive-list"></div>
     </dialog>
     <dialog id="archive-export-dialog">
       <div class="dialog-heading">
-        <h2>导出 HTML</h2>
+        <h2>导出事项目录</h2>
         <button id="archive-export-close" type="button" aria-label="关闭导出">×</button>
       </div>
       <form id="archive-export-form">
         <p id="archive-export-title"></p>
+        <label>导出根目录</label>
+        <div class="export-root-row">
+          <output id="archive-export-root">尚未选择目录</output
+          ><button id="archive-choose-root" type="button">选择根目录</button>
+        </div>
+        <p id="archive-export-location-hint" class="hint">
+          将在所选位置新建独立存档文件夹，每个事项一份 HTML，并附 index.html 总目录。
+        </p>
         <label class="check"
           ><input
             id="archive-include-private"
             type="checkbox"
-          />包含受保护事项（需要开启眼睛开关并验证密码）</label
+          />包含受保护事项（需验证密码，导出文件未加密）</label
         ><label id="archive-password-field" hidden
           >总体密码<input id="archive-export-password" type="password" autocomplete="off"
         /></label>
-        <p class="hint">HTML 内嵌图片，可离线查看。导出的文件没有密码保护，请妥善保存或分享。</p>
+        <p class="hint">
+          每个 HTML 内嵌自己的图片，可离线查看。导出目录中的文件没有密码保护，请妥善保存或分享。
+        </p>
         <p id="archive-export-error" class="privacy-error" role="alert"></p>
-        <button type="submit" class="primary">下载 HTML 文件</button>
+        <div class="form-actions">
+          <button id="archive-export-zip" type="button">下载目录 ZIP</button
+          ><button id="archive-export-submit" type="submit" class="primary">导出到目录</button>
+        </div>
       </form>
     </dialog>
     <div id="toast" role="status" aria-live="polite"></div>
