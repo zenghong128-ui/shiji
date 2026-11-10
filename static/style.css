@@ -1502,3 +1502,45 @@ footer .icon-button.enabled .eye-slash {
   opacity: 0.45;
   cursor: default;
 }
+
+.sidebar-resizer {
+  display: none;
+}
+@media (min-width: 561px) {
+  aside {
+    width: var(--sidebar-width, 236px);
+  }
+  main {
+    margin-left: var(--sidebar-width, 236px);
+    width: calc(100% - var(--sidebar-width, 236px));
+  }
+  aside.sidebar-compact {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  aside.sidebar-compact kbd {
+    display: none;
+  }
+  .sidebar-resizer {
+    display: block;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--sidebar-width, 236px) - 3px);
+    width: 7px;
+    cursor: col-resize;
+    touch-action: none;
+    z-index: 5;
+  }
+  .sidebar-resizer:hover,
+  .sidebar-resizer:focus-visible,
+  .resizing-sidebar .sidebar-resizer {
+    background: #80a6ec;
+    outline: none;
+  }
+  .resizing-sidebar,
+  .resizing-sidebar * {
+    cursor: col-resize !important;
+    user-select: none !important;
+  }
+}

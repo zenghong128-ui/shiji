@@ -47,7 +47,7 @@
 ### Windows 下载版：无需安装 Python
 
 1. 打开 **[最新版本下载页](https://github.com/zenghong128-ui/shiji/releases/latest)**。
-2. 下载 `Shiji-v1.2.1-windows-x64.zip`，将整个压缩包解压到一个文件夹。
+2. 下载 `Shiji-v1.2.2-windows-x64.zip`，将整个压缩包解压到一个文件夹。
 3. 双击 `Shiji.exe`，开始记录。推荐使用 Windows 10/11 与 Microsoft Edge。
 4. 需要结束后台时，双击同目录的 `Stop-Shiji.cmd`。
 

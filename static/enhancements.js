@@ -436,6 +436,86 @@ $('#archive-export-form').onsubmit = async (event) => {
 $('#archive-export-zip').onclick = () => exportArchive('zip');
 updateExportRootLabel();
 
+// Keep the resize handle outside the scrolling sidebar so it is always reachable.
+(() => {
+  const sidebar = document.querySelector('aside');
+  sidebar.id = 'sidebar';
+  const handle = el('div', 'sidebar-resizer');
+  handle.id = 'sidebar-resizer';
+  handle.tabIndex = 0;
+  handle.setAttribute('role', 'separator');
+  handle.setAttribute('aria-orientation', 'vertical');
+  handle.setAttribute('aria-controls', 'sidebar');
+  handle.setAttribute('aria-label', '调整左侧栏宽度');
+  handle.title = '左右拖动调整宽度；双击恢复默认；方向键微调';
+  sidebar.after(handle);
+  const key = 'shiji-sidebar-width';
+  let preferred = null,
+    drag = null;
+  try {
+    const stored = Number(localStorage.getItem(key));
+    if (Number.isFinite(stored) && stored >= 175 && stored <= 560) preferred = stored;
+  } catch {}
+  const limits = () => ({ min: 175, max: Math.max(175, Math.min(560, innerWidth - 320)) });
+  function applyWidth(width = preferred ?? (innerWidth <= 800 ? 175 : 236)) {
+    const { min, max } = limits();
+    const value = Math.round(Math.max(min, Math.min(max, width)));
+    document.documentElement.style.setProperty('--sidebar-width', value + 'px');
+    sidebar.classList.toggle('sidebar-compact', value < 230);
+    handle.setAttribute('aria-valuemin', String(min));
+    handle.setAttribute('aria-valuemax', String(max));
+    handle.setAttribute('aria-valuenow', String(value));
+    handle.setAttribute('aria-valuetext', value + ' 像素');
+    return value;
+  }
+  function remember() {
+    try {
+      if (preferred === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, String(preferred));
+    } catch {}
+  }
+  handle.onpointerdown = (event) => {
+    if (event.button !== 0 || innerWidth <= 560) return;
+    event.preventDefault();
+    handle.focus();
+    drag = { x: event.clientX, width: sidebar.getBoundingClientRect().width };
+    handle.setPointerCapture(event.pointerId);
+    document.body.classList.add('resizing-sidebar');
+  };
+  handle.onpointermove = (event) => {
+    if (!drag) return;
+    preferred = applyWidth(drag.width + event.clientX - drag.x);
+  };
+  function finishDrag() {
+    if (!drag) return;
+    drag = null;
+    document.body.classList.remove('resizing-sidebar');
+    remember();
+  }
+  handle.onpointerup = finishDrag;
+  handle.onpointercancel = finishDrag;
+  handle.onlostpointercapture = finishDrag;
+  handle.ondblclick = () => {
+    preferred = null;
+    applyWidth();
+    remember();
+  };
+  handle.onkeydown = (event) => {
+    const { min, max } = limits();
+    const current = sidebar.getBoundingClientRect().width;
+    const values = { ArrowLeft: current - 16, ArrowRight: current + 16, Home: min, End: max };
+    if (!(event.key in values)) return;
+    event.preventDefault();
+    preferred = applyWidth(values[event.key]);
+    remember();
+  };
+  addEventListener('resize', () => {
+    finishDrag();
+    applyWidth();
+  });
+  applyWidth();
+})();
+
 document.addEventListener('selectionchange', () => {
   const selection = getSelection();
   if (!selection.anchorNode || !$('#detail-editor').contains(selection.anchorNode)) return;
