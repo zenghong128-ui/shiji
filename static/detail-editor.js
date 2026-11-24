@@ -324,13 +324,14 @@ class DetailEditor {
     }
   }
   restore() {
+    const savedRange = this.range?.cloneRange();
     this.element.focus();
-    const range = this.range;
+    const range = savedRange;
     if (!range || !this.element.contains(range.commonAncestorContainer)) {
       this.range = document.createRange();
       this.range.selectNodeContents(this.element);
       this.range.collapse(false);
-    }
+    } else this.range = range;
     const selection = getSelection();
     selection.removeAllRanges();
     selection.addRange(this.range);
@@ -429,10 +430,63 @@ class DetailEditor {
   }
   format(command, value = null) {
     this.restore();
+    if (command === 'formatBlock') {
+      if (!['p', 'h1', 'h2', 'h3'].includes(value)) return;
+      this.clearInlineFonts();
+    }
     document.execCommand('styleWithCSS', false, false);
     document.execCommand(command, false, value);
     this.remember();
     this.element.dispatchEvent(new Event('input', { bubbles: true }));
+    this.element.dispatchEvent(new Event('formatstatechange'));
+  }
+  selectedBlocks() {
+    const selection = getSelection();
+    if (!selection.rangeCount) return [];
+    const range = selection.getRangeAt(0);
+    const selector = 'p,h1,h2,h3,div,li';
+    if (range.collapsed) {
+      let node = range.startContainer;
+      if (node === this.element) node = node.childNodes[range.startOffset] || node.lastChild;
+      const block = (node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement)?.closest(
+        selector,
+      );
+      return block && this.element.contains(block) && block !== this.element ? [block] : [];
+    }
+    return [...this.element.querySelectorAll(selector)].filter(
+      (block) => !block.querySelector(selector) && range.intersectsNode(block),
+    );
+  }
+  clearInlineFonts() {
+    for (const block of this.selectedBlocks()) {
+      for (const node of [block, ...block.querySelectorAll('[style],font')]) {
+        for (const property of ['font-size', 'font-family', 'font-weight', 'line-height'])
+          node.style.removeProperty(property);
+        if (node.tagName === 'FONT') {
+          node.removeAttribute('size');
+          node.removeAttribute('face');
+        }
+      }
+    }
+  }
+  clearFormatting() {
+    this.restore();
+    const selection = getSelection();
+    if (selection.isCollapsed) {
+      const block = this.selectedBlocks()[0];
+      if (block) {
+        const range = document.createRange();
+        range.selectNodeContents(block);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }
+    this.clearInlineFonts();
+    document.execCommand('removeFormat', false, null);
+    document.execCommand('formatBlock', false, 'p');
+    this.remember();
+    this.element.dispatchEvent(new Event('input', { bubbles: true }));
+    this.element.dispatchEvent(new Event('formatstatechange'));
   }
   serializeHtml() {
     const wrapper = document.createElement('div');

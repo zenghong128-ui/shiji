@@ -34,6 +34,11 @@ $('#format-bold').onmousedown = (event) => {
 $('#format-bold').onclick = () => detailEditor.format('bold');
 $('#format-heading').onmousedown = () => detailEditor.remember();
 $('#format-heading').onchange = (event) => detailEditor.format('formatBlock', event.target.value);
+$('#format-clear').onmousedown = (event) => {
+  event.preventDefault();
+  detailEditor.remember();
+};
+$('#format-clear').onclick = () => detailEditor.clearFormatting();
 
 let pendingClose = null;
 function requestEditorClose() {
@@ -516,13 +521,26 @@ updateExportRootLabel();
   applyWidth();
 })();
 
-document.addEventListener('selectionchange', () => {
+function updateFormatState() {
   const selection = getSelection();
-  if (!selection.anchorNode || !$('#detail-editor').contains(selection.anchorNode)) return;
+  if (
+    !selection.anchorNode ||
+    !$('#detail-editor').contains(selection.anchorNode) ||
+    !$('#detail-editor').contains(selection.focusNode)
+  )
+    return;
   const element =
     selection.anchorNode.nodeType === Node.ELEMENT_NODE
       ? selection.anchorNode
       : selection.anchorNode.parentElement;
-  $('#format-heading').value = element.closest('h1,h2,h3')?.tagName.toLowerCase() || 'p';
+  const nativeBlock = String(document.queryCommandValue('formatBlock'))
+    .toLowerCase()
+    .replace(/[<>]/g, '');
+  $('#format-heading').value = ['h1', 'h2', 'h3'].includes(nativeBlock)
+    ? nativeBlock
+    : element.closest('h1,h2,h3')?.tagName.toLowerCase() || 'p';
   $('#format-bold').setAttribute('aria-pressed', String(document.queryCommandState('bold')));
-});
+}
+document.addEventListener('selectionchange', updateFormatState);
+$('#detail-editor').addEventListener('input', updateFormatState);
+$('#detail-editor').addEventListener('formatstatechange', updateFormatState);
