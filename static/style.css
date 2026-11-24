@@ -1544,3 +1544,70 @@ footer .icon-button.enabled .eye-slash {
     user-select: none !important;
   }
 }
+
+/* Full-window writing mode reuses the existing editor and its unsaved draft. */
+.detail-fullscreen-caption {
+  display: none;
+}
+#editor.detail-fullscreen {
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 16px;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+#editor.detail-fullscreen #note-form {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+#editor.detail-fullscreen #note-form > :not(.detail-field):not(#save-error) {
+  display: none !important;
+}
+#editor.detail-fullscreen .detail-field {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+#editor.detail-fullscreen .detail-fullscreen-caption {
+  display: block;
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 10px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#editor.detail-fullscreen #detail-label,
+#editor.detail-fullscreen .detail-field > .hint,
+#editor.detail-fullscreen .detail-tools > span {
+  display: none;
+}
+#editor.detail-fullscreen .detail-tools {
+  flex-shrink: 0;
+}
+#editor.detail-fullscreen #detail-fullscreen-save {
+  margin-left: auto;
+  color: white;
+  background: var(--blue);
+}
+#editor.detail-fullscreen #detail-editor {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+}
+#editor.detail-fullscreen #save-error {
+  flex-shrink: 0;
+  max-height: 25vh;
+  overflow: auto;
+  margin: 10px 0 0;
+}

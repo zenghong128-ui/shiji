@@ -115,6 +115,7 @@
           ><input name="private" type="checkbox" />隐私事项（默认关闭，查看详情需验证密码）</label
         >
         <div class="detail-field">
+          <p id="detail-fullscreen-caption" class="detail-fullscreen-caption"></p>
           <label id="detail-label">详细信息</label>
           <div class="detail-tools">
             <button type="button" id="format-bold" aria-label="加粗选中文字" title="加粗 Ctrl+B">
@@ -127,6 +128,9 @@
             ><button type="button" id="format-clear" title="所选文字或当前段落恢复普通正文">
               清除格式</button
             ><button type="button" id="insert-image">＋ 插入图片</button
+            ><button type="button" id="detail-fullscreen" aria-pressed="false">全屏编辑</button
+            ><button type="button" id="detail-fullscreen-save" class="primary" hidden>
+              保存事项</button
             ><span>可直接粘贴截图或拖入图片</span
             ><input
               id="images"

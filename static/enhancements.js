@@ -40,6 +40,52 @@ $('#format-clear').onmousedown = (event) => {
 };
 $('#format-clear').onclick = () => detailEditor.clearFormatting();
 
+let detailScrollBeforeFullscreen = 0;
+function setDetailFullscreen(enabled) {
+  const editor = $('#editor');
+  if (enabled) {
+    detailEditor.remember();
+    detailScrollBeforeFullscreen = editor.scrollTop;
+    $('#detail-fullscreen-caption').textContent =
+      $('#note-form').elements.title.value || '详细信息';
+  }
+  editor.classList.toggle('detail-fullscreen', enabled);
+  $('#detail-fullscreen').textContent = enabled ? '退出全屏' : '全屏编辑';
+  $('#detail-fullscreen').setAttribute('aria-pressed', String(enabled));
+  $('#detail-fullscreen-save').hidden = !enabled;
+  if (enabled) detailEditor.restore();
+  else {
+    editor.scrollTop = detailScrollBeforeFullscreen;
+    $('#detail-fullscreen').focus({ preventScroll: true });
+  }
+}
+$('#detail-fullscreen').onmousedown = (event) => {
+  event.preventDefault();
+  detailEditor.remember();
+};
+$('#detail-fullscreen').onclick = () =>
+  setDetailFullscreen(!$('#editor').classList.contains('detail-fullscreen'));
+$('#detail-fullscreen-save').onclick = async () => {
+  const button = $('#detail-fullscreen-save');
+  const form = $('#note-form');
+  // Reveal metadata before native validation attempts to focus a hidden field.
+  if (!form.checkValidity() || (form.elements.remind.checked && !form.elements.time.value))
+    setDetailFullscreen(false);
+  button.disabled = true;
+  try {
+    await saveEditor();
+  } finally {
+    button.disabled = false;
+  }
+};
+$('#editor').addEventListener('close', () => {
+  $('#editor').classList.remove('detail-fullscreen');
+  $('#detail-fullscreen').textContent = '全屏编辑';
+  $('#detail-fullscreen').setAttribute('aria-pressed', 'false');
+  $('#detail-fullscreen-save').hidden = true;
+  $('#detail-fullscreen-caption').textContent = '';
+});
+
 let pendingClose = null;
 function requestEditorClose() {
   if (!editorDirty()) {
@@ -72,7 +118,8 @@ function requestEditorClose() {
 $('#close-editor').onclick = requestEditorClose;
 $('#editor').addEventListener('cancel', (event) => {
   event.preventDefault();
-  requestEditorClose();
+  if ($('#editor').classList.contains('detail-fullscreen')) setDetailFullscreen(false);
+  else requestEditorClose();
 });
 $('#unsaved-cancel').onclick = () => $('#unsaved-dialog').close('cancel');
 $('#unsaved-discard').onclick = () => $('#unsaved-dialog').close('discard');
